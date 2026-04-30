@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Brightness Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="panel">
+    <div id="tabs">
+      <button class="tab active" data-tab="mic">麦克风</button>
+      <button class="tab" data-tab="file">文件</button>
+      <button class="tab" data-tab="url">URL</button>
+    </div>
+
+    <div id="tab-mic" class="tab-pane active">
+      <button id="btn-mic" class="action-btn">开始监听</button>
+    </div>
+
+    <div id="tab-file" class="tab-pane">
+      <label id="file-label">选择音频文件
+        <input type="file" id="file-input" accept="audio/*">
+      </label>
+      <span id="file-name">未选择</span>
+      <button id="btn-file" class="action-btn">播放</button>
+    </div>
+
+    <div id="tab-url" class="tab-pane">
+      <input type="text" id="url-input" placeholder="输入音频 URL…">
+      <button id="btn-url" class="action-btn">加载</button>
+    </div>
+
+    <div id="meters">
+      <div class="meter-row">
+        <span class="meter-label bass">BASS</span>
+        <div class="meter-bar"><div id="m-bass" class="meter-fill bass"></div></div>
+      </div>
+      <div class="meter-row">
+        <span class="meter-label mid">MID</span>
+        <div class="meter-bar"><div id="m-mid" class="meter-fill mid"></div></div>
+      </div>
+      <div class="meter-row">
+        <span class="meter-label treble">HI</span>
+        <div class="meter-bar"><div id="m-treble" class="meter-fill treble"></div></div>
+      </div>
+    </div>
+
+    <div id="brightness-row">
+      <span>亮度</span>
+      <div class="meter-bar"><div id="m-brightness" class="meter-fill bright"></div></div>
+      <span id="brightness-val">--</span>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>

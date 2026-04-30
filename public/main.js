@@ -1,0 +1,284 @@
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let audioCtx, analyser, source, animFrame;
+let audioElement = null;
+let isActive = false;
+let micStream = null;
+let lastBrightnessUpdate = 0;
+const BRIGHTNESS_INTERVAL = 80;
+
+// --- Resize ---
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Tab switching ---
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+  });
+});
+
+// --- File input label ---
+document.getElementById('file-input').addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  document.getElementById('file-name').textContent = f ? f.name : '未选择';
+});
+
+// --- Audio context setup ---
+function createAnalyser(ctx) {
+  const a = ctx.createAnalyser();
+  a.fftSize = 2048;
+  a.smoothingTimeConstant = 0.82;
+  return a;
+}
+
+// --- Stop everything ---
+function stop() {
+  isActive = false;
+  if (animFrame) cancelAnimationFrame(animFrame);
+  if (source) { try { source.disconnect(); } catch (_) {} source = null; }
+  if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  if (audioElement) { audioElement.pause(); audioElement = null; }
+}
+
+function setStatus(msg, type = '') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = type;
+}
+
+// --- Mic ---
+const btnMic = document.getElementById('btn-mic');
+btnMic.addEventListener('click', async () => {
+  if (isActive) {
+    stop();
+    btnMic.textContent = '开始监听';
+    btnMic.classList.remove('active');
+    setStatus('已停止');
+    return;
+  }
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    audioCtx = new AudioContext();
+    analyser = createAnalyser(audioCtx);
+    source = audioCtx.createMediaStreamSource(micStream);
+    source.connect(analyser);
+    startDraw();
+    btnMic.textContent = '停止';
+    btnMic.classList.add('active');
+    setStatus('麦克风已连接', 'ok');
+  } catch (e) {
+    setStatus('麦克风失败: ' + e.message, 'error');
+  }
+});
+
+// --- File ---
+document.getElementById('btn-file').addEventListener('click', () => {
+  const file = document.getElementById('file-input').files[0];
+  if (!file) { setStatus('请先选择文件', 'warn'); return; }
+  loadAudio(URL.createObjectURL(file), file.name);
+});
+
+// --- URL ---
+document.getElementById('btn-url').addEventListener('click', () => {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) { setStatus('请输入 URL', 'warn'); return; }
+  loadAudio(url, url.split('/').pop() || url);
+});
+
+function loadAudio(src, label) {
+  stop();
+  audioCtx = new AudioContext();
+  analyser = createAnalyser(audioCtx);
+
+  audioElement = new Audio();
+  audioElement.crossOrigin = 'anonymous';
+  audioElement.src = src;
+
+  source = audioCtx.createMediaElementSource(audioElement);
+  source.connect(analyser);
+  source.connect(audioCtx.destination);
+
+  audioElement.play()
+    .then(() => { startDraw(); setStatus(`▶ ${label}`, 'ok'); })
+    .catch(e => setStatus('播放失败: ' + e.message, 'error'));
+
+  audioElement.addEventListener('ended', () => setStatus('播放结束'));
+}
+
+// --- Draw loop ---
+function startDraw() {
+  isActive = true;
+  const freqBuf = new Uint8Array(analyser.frequencyBinCount);
+  const timeBuf = new Uint8Array(analyser.fftSize);
+
+  function frame() {
+    if (!isActive) return;
+    animFrame = requestAnimationFrame(frame);
+
+    analyser.getByteFrequencyData(freqBuf);
+    analyser.getByteTimeDomainData(timeBuf);
+
+    const W = canvas.width, H = canvas.height;
+    const cx = W / 2, cy = H / 2;
+    const sampleRate = audioCtx.sampleRate;
+    const binHz = sampleRate / analyser.fftSize;
+    const bufLen = freqBuf.length;
+
+    const bassEnd   = Math.max(1, Math.floor(300 / binHz));
+    const midEnd    = Math.max(bassEnd + 1, Math.floor(3000 / binHz));
+    const trebleEnd = bufLen;
+
+    // Band averages (0–1)
+    let bSum = 0, mSum = 0, tSum = 0;
+    for (let i = 0; i < bassEnd; i++) bSum += freqBuf[i];
+    for (let i = bassEnd; i < midEnd; i++) mSum += freqBuf[i];
+    for (let i = midEnd; i < trebleEnd; i++) tSum += freqBuf[i];
+    const bass   = bSum / bassEnd / 255;
+    const mid    = mSum / (midEnd - bassEnd) / 255;
+    const treble = tSum / (trebleEnd - midEnd) / 255;
+
+    // RMS volume
+    let sq = 0;
+    for (let i = 0; i < timeBuf.length; i++) { const v = (timeBuf[i] - 128) / 128; sq += v * v; }
+    const volume = Math.min(1, Math.sqrt(sq / timeBuf.length) * 4);
+
+    // Dominant hue: bass=0°, mid=120°, treble=240°
+    const total = bass + mid + treble + 1e-4;
+    const hue = (bass * 0 + mid * 120 + treble * 240) / total;
+
+    // Update UI meters
+    document.getElementById('m-bass').style.width   = (bass   * 100).toFixed(1) + '%';
+    document.getElementById('m-mid').style.width    = (mid    * 100).toFixed(1) + '%';
+    document.getElementById('m-treble').style.width = (treble * 100).toFixed(1) + '%';
+
+    // Real brightness (throttled)
+    const now = performance.now();
+    if (now - lastBrightnessUpdate > BRIGHTNESS_INTERVAL) {
+      lastBrightnessUpdate = now;
+      const bVal = 0.08 + volume * 0.92;
+      updateBrightness(bVal);
+      document.getElementById('m-brightness').style.width = (bVal * 100).toFixed(0) + '%';
+      document.getElementById('brightness-val').textContent = (bVal * 100).toFixed(0) + '%';
+    }
+
+    // ── Background ──────────────────────────────────────────────
+    const bgL = 3 + volume * 12;
+    ctx.fillStyle = `hsl(${hue}, 60%, ${bgL}%)`;
+    ctx.fillRect(0, 0, W, H);
+
+    const baseR = Math.min(W, H) * 0.22;
+
+    // ── Radial frequency bars ────────────────────────────────────
+    const numBars = Math.min(bufLen, 200);
+    const innerR  = baseR * 1.05;
+    const maxBar  = baseR * 1.6;
+
+    ctx.save();
+    for (let i = 0; i < numBars; i++) {
+      const t     = i / numBars;
+      const angle = t * Math.PI * 2 - Math.PI / 2;
+      const val   = freqBuf[i] / 255;
+      const len   = val * maxBar;
+
+      // color gradient: bass=red → mid=green → treble=blue
+      const barHue = t < 0.2 ? lerp(0, 30, t / 0.2)
+                   : t < 0.6 ? lerp(90, 150, (t - 0.2) / 0.4)
+                   :            lerp(200, 270, (t - 0.6) / 0.4);
+
+      const x1 = cx + Math.cos(angle) * innerR;
+      const y1 = cy + Math.sin(angle) * innerR;
+      const x2 = cx + Math.cos(angle) * (innerR + len);
+      const y2 = cy + Math.sin(angle) * (innerR + len);
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = `hsl(${barHue}, 85%, ${45 + val * 35}%)`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // ── Circular waveform ────────────────────────────────────────
+    ctx.save();
+    ctx.beginPath();
+    const wLen = timeBuf.length;
+    for (let i = 0; i < wLen; i++) {
+      const angle = (i / wLen) * Math.PI * 2 - Math.PI / 2;
+      const v = (timeBuf[i] - 128) / 128;
+      const r = baseR + v * baseR * 0.75;
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = `hsl(${hue + 60}, 90%, 72%)`;
+    ctx.lineWidth = 1.8;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = `hsl(${hue + 60}, 100%, 80%)`;
+    ctx.stroke();
+    ctx.restore();
+
+    // ── Center hexagon (bass reactive) ──────────────────────────
+    const t = performance.now() / 1000;
+    drawPoly(cx, cy, 6, baseR * 0.38 * (1 + bass * 0.9),
+      t * (0.4 + bass * 1.8),
+      `hsl(${hue + 180}, 90%, ${55 + bass * 30}%)`,
+      2 + bass * 4, 20 * bass, hue + 180);
+
+    // ── Inner triangle (treble reactive) ────────────────────────
+    drawPoly(cx, cy, 3, baseR * 0.18 * (1 + treble * 0.7),
+      -t * (0.9 + treble * 4),
+      `hsl(${hue + 300}, 90%, ${65 + treble * 25}%)`,
+      1.5 + treble * 2.5, 14 * treble, hue + 300);
+
+    // ── Mid square ──────────────────────────────────────────────
+    drawPoly(cx, cy, 4, baseR * 0.26 * (1 + mid * 0.5),
+      t * (0.25 + mid * 1.2) + Math.PI / 4,
+      `hsl(${hue + 60}, 80%, ${50 + mid * 30}%)`,
+      1.5 + mid * 2, 10 * mid, hue + 60);
+  }
+
+  frame();
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function drawPoly(cx, cy, sides, r, rotation, color, lineW, glow, glowHue) {
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i <= sides; i++) {
+    const angle = (i / sides) * Math.PI * 2 + rotation;
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineW;
+  if (glow > 0) {
+    ctx.shadowBlur = glow;
+    ctx.shadowColor = `hsl(${glowHue}, 100%, 85%)`;
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+async function updateBrightness(value) {
+  try {
+    await fetch('/api/brightness', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value })
+    });
+  } catch (_) {}
+}
