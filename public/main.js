@@ -7,6 +7,7 @@ let isActive = false;
 let micStream = null;
 let lastBrightnessUpdate = 0;
 const BRIGHTNESS_INTERVAL = 80;
+let syncBrightness = false;
 
 // --- Resize ---
 function resize() {
@@ -15,6 +16,14 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 resize();
+
+// --- Brightness toggle ---
+const toggle = document.getElementById('toggle');
+toggle.addEventListener('click', () => {
+  syncBrightness = !syncBrightness;
+  toggle.className = syncBrightness ? 'toggle-on' : 'toggle-off';
+  if (!syncBrightness) updateBrightness(1.0); // restore when disabled
+});
 
 // --- Tab switching ---
 document.querySelectorAll('.tab').forEach(btn => {
@@ -161,12 +170,12 @@ function startDraw() {
     document.getElementById('m-mid').style.width    = (mid    * 100).toFixed(1) + '%';
     document.getElementById('m-treble').style.width = (treble * 100).toFixed(1) + '%';
 
-    // Real brightness (throttled)
+    // Real brightness (throttled, only when toggle is on)
     const now = performance.now();
     if (now - lastBrightnessUpdate > BRIGHTNESS_INTERVAL) {
       lastBrightnessUpdate = now;
       const bVal = 0.08 + volume * 0.92;
-      updateBrightness(bVal);
+      if (syncBrightness) updateBrightness(bVal);
       document.getElementById('m-brightness').style.width = (bVal * 100).toFixed(0) + '%';
       document.getElementById('brightness-val').textContent = (bVal * 100).toFixed(0) + '%';
     }

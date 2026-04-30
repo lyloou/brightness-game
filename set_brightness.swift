@@ -11,4 +11,12 @@ guard CommandLine.arguments.count > 1,
 }
 
 let clamped = max(0.0, min(1.0, value))
-_ = DisplayServicesSetBrightness(CGMainDisplayID(), clamped)
+
+var displayCount: UInt32 = 0
+CGGetActiveDisplayList(0, nil, &displayCount)
+var displays = [CGDirectDisplayID](repeating: 0, count: Int(displayCount))
+CGGetActiveDisplayList(displayCount, &displays, &displayCount)
+
+for id in displays {
+    _ = DisplayServicesSetBrightness(id, clamped)
+}
