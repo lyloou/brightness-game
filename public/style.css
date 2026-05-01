@@ -172,6 +172,11 @@ body {
   background: rgba(255,255,255,0.12);
   color: #ccc;
 }
+.bmode.active[data-mode="color"] {
+  background: linear-gradient(135deg, #ff4444 0%, #44ff88 50%, #4488ff 100%);
+  color: #fff;
+  box-shadow: 0 0 14px 2px rgba(180, 180, 255, 0.35);
+}
 .bmode.active[data-mode="page"] {
   background: linear-gradient(135deg, #4488ff, #aa44ff);
   color: #fff;

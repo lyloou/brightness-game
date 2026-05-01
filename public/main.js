@@ -7,7 +7,7 @@ let isActive = false;
 let micStream = null;
 let lastBrightnessUpdate = 0;
 const BRIGHTNESS_INTERVAL = 80;
-let brightnessMode = 'off'; // 'off' | 'page' | 'screen'
+let brightnessMode = 'off'; // 'off' | 'color' | 'page' | 'screen'
 
 // --- Resize ---
 function resize() {
@@ -25,6 +25,7 @@ document.querySelectorAll('.bmode').forEach(btn => {
     document.querySelectorAll('.bmode').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     if (prev === 'screen' && brightnessMode !== 'screen') updateBrightness(1.0);
+    if (brightnessMode === 'color') updateBrightness(1.0);
   });
 });
 
@@ -259,6 +260,18 @@ function startDraw() {
       t * (0.25 + mid * 1.2) + Math.PI / 4,
       `hsl(${hue + 60}, 80%, ${50 + mid * 30}%)`,
       1.5 + mid * 2, 10 * mid, hue + 60);
+
+    // ── Page color overlay: BASS=R, MID=G, HI=B ────────────────
+    if (brightnessMode !== 'off') {
+      const r = Math.round(bass * 255);
+      const g = Math.round(mid * 255);
+      const b = Math.round(treble * 255);
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
 
     // ── Page brightness overlay ──────────────────────────────────
     if (brightnessMode === 'page') {
