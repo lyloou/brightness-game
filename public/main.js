@@ -45,6 +45,80 @@ document.getElementById('file-input').addEventListener('change', (e) => {
   document.getElementById('file-name').textContent = f ? f.name : '未选择';
 });
 
+// --- Seekbar & play/pause ---
+const seekbarWrap  = document.getElementById('seekbar-wrap');
+const seekbar      = document.getElementById('seekbar');
+const seekFill     = document.getElementById('seek-fill');
+const seekThumb    = document.getElementById('seek-thumb');
+const seekCur      = document.getElementById('seek-cur');
+const seekDur      = document.getElementById('seek-dur');
+const btnPlayPause = document.getElementById('btn-playpause');
+
+function fmtTime(s) {
+  if (!isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60).toString().padStart(2, '0');
+  return `${m}:${sec}`;
+}
+
+function updateSeek() {
+  if (!audioElement || !audioElement.duration) return;
+  const pct = audioElement.currentTime / audioElement.duration * 100;
+  seekFill.style.width = pct + '%';
+  seekThumb.style.left = pct + '%';
+  seekCur.textContent  = fmtTime(audioElement.currentTime);
+  seekDur.textContent  = fmtTime(audioElement.duration);
+}
+
+function updatePlayPauseBtn() {
+  btnPlayPause.textContent = (!audioElement || audioElement.paused) ? '▶' : '⏸';
+}
+
+btnPlayPause.addEventListener('click', () => {
+  if (!audioElement) return;
+  if (audioElement.paused) {
+    audioElement.play();
+  } else {
+    audioElement.pause();
+  }
+  updatePlayPauseBtn();
+});
+
+function getClientX(e) {
+  return e.touches ? e.touches[0].clientX : e.clientX;
+}
+
+function seekTo(clientX) {
+  if (!audioElement || !audioElement.duration) return;
+  const rect = seekbar.getBoundingClientRect();
+  const pct  = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  audioElement.currentTime = pct * audioElement.duration;
+  updateSeek();
+}
+
+let seeking = false;
+seekbar.addEventListener('mousedown', (e) => {
+  seeking = true;
+  seekbar.classList.add('dragging');
+  seekTo(e.clientX);
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => { if (seeking) seekTo(e.clientX); });
+window.addEventListener('mouseup', () => {
+  if (seeking) { seeking = false; seekbar.classList.remove('dragging'); }
+});
+seekbar.addEventListener('touchstart', (e) => {
+  seeking = true;
+  seekbar.classList.add('dragging');
+  seekTo(e.touches[0].clientX);
+}, { passive: true });
+window.addEventListener('touchmove', (e) => {
+  if (seeking) seekTo(e.touches[0].clientX);
+}, { passive: true });
+window.addEventListener('touchend', () => {
+  if (seeking) { seeking = false; seekbar.classList.remove('dragging'); }
+});
+
 // --- Audio context setup ---
 function createAnalyser(ctx) {
   const a = ctx.createAnalyser();
@@ -61,6 +135,7 @@ function stop() {
   if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
   if (audioElement) { audioElement.pause(); audioElement = null; }
+  seekbarWrap.classList.add('hidden');
 }
 
 function setStatus(msg, type = '') {
@@ -120,6 +195,14 @@ function loadAudio(src, label) {
   source = audioCtx.createMediaElementSource(audioElement);
   source.connect(analyser);
   source.connect(audioCtx.destination);
+
+  audioElement.addEventListener('timeupdate', updateSeek);
+  audioElement.addEventListener('pause', updatePlayPauseBtn);
+  audioElement.addEventListener('play',  updatePlayPauseBtn);
+  audioElement.addEventListener('loadedmetadata', () => {
+    seekbarWrap.classList.remove('hidden');
+    updateSeek();
+  });
 
   audioElement.play()
     .then(() => { startDraw(); setStatus(`▶ ${label}`, 'ok'); })

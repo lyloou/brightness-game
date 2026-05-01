@@ -93,6 +93,82 @@ body {
 }
 #url-input:focus { border-color: rgba(255,255,255,0.35); }
 
+.hidden { display: none !important; }
+
+#seekbar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#seek-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#btn-playpause {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08);
+  color: #ccc;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+}
+#btn-playpause:hover { background: rgba(255,255,255,0.16); color: #fff; }
+
+#seekbar {
+  flex: 1;
+  position: relative;
+  height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: height 0.12s;
+}
+#seekbar:hover,
+#seekbar.dragging { height: 6px; }
+#seekbar:hover #seek-thumb,
+#seekbar.dragging #seek-thumb { opacity: 1; }
+
+#seek-fill {
+  height: 100%;
+  width: 0%;
+  background: rgba(255,255,255,0.6);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+#seek-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+#seek-times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #555;
+  padding: 0 2px;
+}
+
 #meters {
   display: flex;
   flex-direction: column;
