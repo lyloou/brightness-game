@@ -7,7 +7,7 @@ let isActive = false;
 let micStream = null;
 let lastBrightnessUpdate = 0;
 const BRIGHTNESS_INTERVAL = 80;
-let syncBrightness = false;
+let brightnessMode = 'off'; // 'off' | 'page' | 'screen'
 
 // --- Resize ---
 function resize() {
@@ -17,12 +17,15 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// --- Brightness toggle ---
-const toggle = document.getElementById('toggle');
-toggle.addEventListener('click', () => {
-  syncBrightness = !syncBrightness;
-  toggle.className = syncBrightness ? 'toggle-on' : 'toggle-off';
-  if (!syncBrightness) updateBrightness(1.0); // restore when disabled
+// --- Brightness mode selector ---
+document.querySelectorAll('.bmode').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const prev = brightnessMode;
+    brightnessMode = btn.dataset.mode;
+    document.querySelectorAll('.bmode').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (prev === 'screen' && brightnessMode !== 'screen') updateBrightness(1.0);
+  });
 });
 
 // --- Tab switching ---
@@ -170,12 +173,12 @@ function startDraw() {
     document.getElementById('m-mid').style.width    = (mid    * 100).toFixed(1) + '%';
     document.getElementById('m-treble').style.width = (treble * 100).toFixed(1) + '%';
 
-    // Real brightness (throttled, only when toggle is on)
+    // Brightness modes
     const now = performance.now();
+    const bVal = 0.08 + volume * 0.92;
     if (now - lastBrightnessUpdate > BRIGHTNESS_INTERVAL) {
       lastBrightnessUpdate = now;
-      const bVal = 0.08 + volume * 0.92;
-      if (syncBrightness) updateBrightness(bVal);
+      if (brightnessMode === 'screen') updateBrightness(bVal);
       document.getElementById('m-brightness').style.width = (bVal * 100).toFixed(0) + '%';
       document.getElementById('brightness-val').textContent = (bVal * 100).toFixed(0) + '%';
     }
@@ -256,6 +259,13 @@ function startDraw() {
       t * (0.25 + mid * 1.2) + Math.PI / 4,
       `hsl(${hue + 60}, 80%, ${50 + mid * 30}%)`,
       1.5 + mid * 2, 10 * mid, hue + 60);
+
+    // ── Page brightness overlay ──────────────────────────────────
+    if (brightnessMode === 'page') {
+      const alpha = lerp(0.88, 0, volume);
+      ctx.fillStyle = `rgba(0,0,0,${alpha.toFixed(3)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
   }
 
   frame();

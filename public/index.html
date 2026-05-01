@@ -48,14 +48,14 @@
     </div>
 
     <div id="brightness-row">
-      <label id="brightness-toggle-label">
-        <span>屏幕亮度</span>
-        <div id="toggle" class="toggle-off" title="同步屏幕亮度">
-          <div class="toggle-knob"></div>
-        </div>
-      </label>
       <div class="meter-bar"><div id="m-brightness" class="meter-fill bright"></div></div>
       <span id="brightness-val">--</span>
+    </div>
+
+    <div id="brightness-mode">
+      <button class="bmode active" data-mode="off">关闭</button>
+      <button class="bmode" data-mode="page">页面亮度</button>
+      <button class="bmode" data-mode="screen">屏幕亮度</button>
     </div>
 
     <div id="status"></div>
